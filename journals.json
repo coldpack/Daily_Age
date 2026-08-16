@@ -1,0 +1,162 @@
+{
+  "_comment": "ISSNs are used to query Crossref. Run `python aging_briefing.py --check-issns` to verify every entry resolves to the journal you expect before relying on the output. Set \"enabled\": false to mute a journal without deleting it. date_filter must stay \"created\" (when Crossref first registered the DOI); \"index\" returns the whole back catalogue whenever a publisher re-deposits old records.",
+  "settings": {
+    "lookback_days": 2,
+    "date_filter": "created",
+    "max_pub_age_days": 400,
+    "ignore_leading_articles": false,
+    "max_pages": 1,
+    "send_when_empty": false,
+    "include_titles_in_email_body": true,
+    "seen_retention_days": 180,
+    "contact_email": "you@example.com",
+    "request_timeout_seconds": 30,
+    "max_rows_per_page": 200
+  },
+  "journals": [
+    {
+      "name": "Nature Aging",
+      "issns": [
+        "2662-8465"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Aging Cell",
+      "issns": [
+        "1474-9718",
+        "1474-9726"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "GeroScience",
+      "issns": [
+        "2509-2715",
+        "2509-2723"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "The Journals of Gerontology: Series A",
+      "issns": [
+        "1079-5006",
+        "1758-535X"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Experimental Gerontology",
+      "issns": [
+        "0531-5565"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Mechanisms of Ageing and Development",
+      "issns": [
+        "0047-6374"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Biogerontology",
+      "issns": [
+        "1389-5729",
+        "1573-6768"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Aging (Aging-US)",
+      "issns": [
+        "1945-4589"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Frontiers in Aging",
+      "issns": [
+        "2673-6217"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Gerontology",
+      "issns": [
+        "0304-324X",
+        "1423-0003"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Age and Ageing",
+      "issns": [
+        "0002-0729",
+        "1468-2834"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Aging Clinical and Experimental Research",
+      "issns": [
+        "1594-0667",
+        "1720-8319"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "The Journals of Gerontology: Series B",
+      "issns": [
+        "1079-5014",
+        "1758-5368"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "The Gerontologist",
+      "issns": [
+        "0016-9013",
+        "1758-5341"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Journal of Aging and Health",
+      "issns": [
+        "0898-2643",
+        "1552-6887"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Frontiers in Aging Neuroscience",
+      "issns": [
+        "1663-4365"
+      ],
+      "enabled": true
+    }
+  ],
+  "noise_title_patterns": [
+    "^correction",
+    "^corrigendum",
+    "^erratum",
+    "^retraction",
+    "^expression of concern",
+    "^editorial board",
+    "^issue information",
+    "^table of contents",
+    "^front matter",
+    "^back matter",
+    "^masthead",
+    "^cover image",
+    "^acknowledgment of reviewers",
+    "^author index",
+    "^subject index",
+    "^thank you to our reviewers",
+    "^index to volume",
+    "^contents$",
+    "^abstracts? from",
+    "^meeting abstracts"
+  ]
+}
