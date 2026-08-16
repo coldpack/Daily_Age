@@ -6,7 +6,7 @@
     "max_pub_age_days": 400,
     "ignore_leading_articles": false,
     "max_pages": 1,
-    "send_when_empty": false,
+    "send_when_empty": true,
     "include_titles_in_email_body": true,
     "seen_retention_days": 180,
     "contact_email": "you@example.com",
