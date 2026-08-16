@@ -1105,7 +1105,7 @@ def build_pdf(
 
 def _render_empty(out_path: Path, ctx: dict, run_date: datetime) -> None:
     regular, bold, unicode_ok = ctx["fonts"]
-    ctx = dict(ctx, columns=1, footer_right="quiet day")
+    ctx = dict(ctx, columns=1, footer_right="Paperless day!")
 
     doc = BaseDocTemplate(
         str(out_path), pagesize=LETTER,
