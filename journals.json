@@ -4,6 +4,7 @@
     "lookback_days": 2,
     "date_filter": "created",
     "max_pub_age_days": 400,
+    "group_by": "journal",
     "ignore_leading_articles": false,
     "max_pages": 1,
     "send_when_empty": true,
