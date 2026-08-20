@@ -870,7 +870,8 @@ def _draw_furniture(canvas, doc, ctx: dict) -> None:
 
 
 def _build_story(papers: list[Paper], d: Density, fonts, ignore_articles: bool,
-                 omitted: int, tail: list[tuple[str, int]] | None = None) -> list[Any]:
+                 omitted: int, tail: list[tuple[str, int]] | None = None,
+                 group_by: str = "journal") -> list[Any]:
     regular, bold, unicode_ok = fonts
     T = lambda s: to_pdf_text(s, unicode_ok)  # noqa: E731
 
@@ -883,23 +884,44 @@ def _build_story(papers: list[Paper], d: Density, fonts, ignore_articles: bool,
         leading=d.leading + 2, textColor=ACCENT_LT,
         spaceBefore=d.space_after + 3, spaceAfter=2.5,
     )
+    # Journal headings carry more text than a single letter, so they get a
+    # slightly smaller size and tighter tracking to stay on one line.
+    journal_style = ParagraphStyle(
+        "journalhead", fontName=bold, fontSize=d.font_size + 0.1,
+        leading=d.leading + 1.5, textColor=ACCENT,
+        spaceBefore=d.space_after + 4, spaceAfter=2.5,
+    )
+    counts: dict[str, int] = {}
+    for _p in papers:
+        counts[_p.journal] = counts.get(_p.journal, 0) + 1
     note_style = ParagraphStyle(
         "note", fontName=regular, fontSize=d.meta_size + 0.4,
         leading=d.leading, textColor=MUTED, spaceBefore=6,
     )
 
     story: list[Any] = []
-    current_letter = None
+    current_group = None
 
     for idx, p in enumerate(papers, start=1):
         block: list[Any] = []
         if d.show_letters:
-            letter = first_letter(p.title, ignore_articles)
-            if letter != current_letter:
-                current_letter = letter
-                block.append(Paragraph(T(letter), letter_style))
-                block.append(HRFlowable(width="100%", thickness=0.5,
-                                        color=RULE, spaceAfter=1.5))
+            if group_by == "journal":
+                group = p.journal
+                if group != current_group:
+                    current_group = group
+                    n = counts.get(group, 0)
+                    head = (f"{T(group).upper()}"
+                            f'  <font size="{d.meta_size:.1f}" color="#71808F">{n}</font>')
+                    block.append(Paragraph(head, journal_style))
+                    block.append(HRFlowable(width="100%", thickness=0.5,
+                                            color=RULE, spaceAfter=1.5))
+            else:
+                group = first_letter(p.title, ignore_articles)
+                if group != current_group:
+                    current_group = group
+                    block.append(Paragraph(T(group), letter_style))
+                    block.append(HRFlowable(width="100%", thickness=0.5,
+                                            color=RULE, spaceAfter=1.5))
 
         href = (p.url or f"https://doi.org/{p.doi}").replace("&", "&amp;")
         title = T(_truncate(p.title, d.title_limit))
@@ -909,12 +931,14 @@ def _build_story(papers: list[Paper], d: Density, fonts, ignore_articles: bool,
             f'{number}<link href="{href}" color="#16324A">{title}</link>'
         )
 
-        meta_bits = [T(p.journal).upper()]
+        meta_bits = [] if (group_by == "journal" and d.show_letters) else [T(p.journal).upper()]
         if d.show_date and p.published:
             meta_bits.append(T(p.published))
         if d.show_authors and p.authors:
             meta_bits.append(T(p.authors))
         meta = " · ".join(meta_bits)
+        if not meta:
+            meta = "&nbsp;"
         line += (
             f'<br/><font size="{d.meta_size:.1f}" color="#71808F">{meta}</font>'
         )
@@ -974,7 +998,7 @@ def _render(papers: list[Paper], d: Density, ctx: dict, target,
         PageTemplate(id="cols", frames=_column_frames(d.columns), onPage=on_page)
     ])
     doc.build(_build_story(papers, d, ctx["fonts"], ctx["ignore_articles"],
-                           omitted, tail))
+                           omitted, tail, ctx.get("group_by", "journal")))
     return pages[0]
 
 
@@ -998,13 +1022,18 @@ def build_pdf(
     serif = setup_serif()
     regular, bold, unicode_ok = fonts
     ignore_articles = settings.get("ignore_leading_articles", False)
+    group_by = settings.get("group_by", "journal")
     # One page is the design target; raise this if you would rather see every
     # title on a very heavy day than have the tail trimmed.
     max_pages = max(1, int(settings.get("max_pages", 1)))
 
     # Defensive: the caller sorts, but the whole promise of this document is
     # A-Z, so guarantee it here rather than trusting every future call site.
-    papers = sorted(papers, key=lambda p: p.sort_key(ignore_articles))
+    if group_by == "journal":
+        papers = sorted(papers, key=lambda p: (p.journal.casefold(),
+                                               normalized_sort_key(p.title, ignore_articles)))
+    else:
+        papers = sorted(papers, key=lambda p: p.sort_key(ignore_articles))
 
     journal_counts: dict[str, int] = {}
     for p in papers:
@@ -1022,11 +1051,13 @@ def build_pdf(
         "fonts": fonts,
         "serif": serif,
         "ignore_articles": ignore_articles,
+        "group_by": group_by,
         # Canvas strings are literal, so these get glyph downgrading but no
         # XML escaping. %B is locale-dependent, hence the serif's charset.
         "date_line": downgrade_glyphs(run_date.strftime("%d %B %Y"), serif[2]),
         "window_line": f"indexed since {window_start}",
-        "strip_right": downgrade_glyphs("SORTED A \u2013 Z", unicode_ok),
+        "strip_right": downgrade_glyphs(
+            "BY JOURNAL" if group_by == "journal" else "SORTED A \u2013 Z", unicode_ok),
         "stats": [
             (str(len(papers)), "new papers"),
             (str(len(journal_counts)), "journals"),
@@ -1082,7 +1113,7 @@ def build_pdf(
 
     density, omitted = chosen
     tail = None
-    if not omitted:
+    if not omitted and group_by != "journal":
         candidate = sorted(journal_counts.items(), key=lambda kv: (-kv[1], kv[0]))
         probe = io.BytesIO()
         try:
@@ -1105,7 +1136,7 @@ def build_pdf(
 
 def _render_empty(out_path: Path, ctx: dict, run_date: datetime) -> None:
     regular, bold, unicode_ok = ctx["fonts"]
-    ctx = dict(ctx, columns=1, footer_right="Paperless day!")
+    ctx = dict(ctx, columns=1, footer_right="quiet day")
 
     doc = BaseDocTemplate(
         str(out_path), pagesize=LETTER,
