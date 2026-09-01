@@ -816,7 +816,7 @@ def _draw_furniture(canvas, doc, ctx: dict) -> None:
     canvas.rect(0, PAGE_H - 4.5, PAGE_W, 4.5, stroke=0, fill=1)  # accent bleed
 
     # Serif caps, widely tracked: the letterhead convention.
-    _tracked(canvas, MARGIN, PAGE_H - 38, "THE DAILY AGE", s_bold, 19, ACCENT, 3.4)
+    _tracked(canvas, MARGIN, PAGE_H - 38, "AGING DAILY", s_bold, 19, ACCENT, 3.4)
 
     # Date sits on the same baseline, right-aligned.
     _tracked(canvas, PAGE_W - MARGIN, PAGE_H - 38, ctx["date_line"],
@@ -1198,7 +1198,7 @@ def send_email(pdf_path: Path, papers: list[Paper], run_date: datetime,
     msg = EmailMessage()
     count = len(papers)
     msg["Subject"] = (
-        f"The Daily Age: Your Aging Brief — {count} new aging {'paper' if count == 1 else 'papers'} "
+        f"Aging Daily: Your Regularly Scheduled Brief — {count} new aging {'paper' if count == 1 else 'papers'} "
         f"— {run_date:%Y-%m-%d}"
     )
     msg["From"] = sender
