@@ -3,7 +3,7 @@
 #py aging_briefing.py --lookback 1
 
 Every morning, this collects newly published papers from 16 aging / gerontology /
-geroscience journals, sorts **all** titles into one alphabetical A–Z list, renders
+geroscience journals, sorts **all** titles by journal, renders
 them as a PDF, and emails that PDF to you.
 
 ---
