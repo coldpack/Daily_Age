@@ -4,7 +4,7 @@ Daily Aging Research Briefing
 =============================
 
 Collects newly published papers from a configured list of aging / gerontology /
-geroscience journals, sorts every title alphabetically into a single A-Z list,
+geroscience journals, sorts every title by paper,
 renders it as a PDF, and emails that PDF to you.
 
 Data source
@@ -1214,7 +1214,7 @@ def send_email(pdf_path: Path, papers: list[Paper], run_date: datetime,
         f"Daily Aging Research Briefing — {run_date:%A, %d %B %Y}",
         "",
         f"{count} new {'paper' if count == 1 else 'papers'} across the monitored journals.",
-        "The attached PDF lists every title alphabetically.",
+        "The attached PDF lists every title by paper.",
         "",
     ]
     if settings.get("include_titles_in_email_body", True) and papers:
@@ -1493,7 +1493,7 @@ def force_utf8_streams() -> None:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Daily aging-research briefing: collect, alphabetize, PDF, email.",
+        description="Daily aging-research briefing: collect, PDF, email.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--config", type=Path, default=HERE / "journals.json")
