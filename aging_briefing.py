@@ -285,6 +285,10 @@ def make_session(contact_email: str) -> requests.Session:
     return session
 
 
+class NotInJournalIndex(Exception):
+    """Crossref has no /journals entry for this ISSN (it may still have the DOIs)."""
+
+
 def crossref_get(
     session: requests.Session,
     url: str,
@@ -304,6 +308,8 @@ def crossref_get(
                 log.debug("select rejected for %s; retrying without it", url)
                 params = {k: v for k, v in params.items() if k != "select"}
                 continue
+            if resp.status_code == 404:
+                raise NotInJournalIndex(url)
             if resp.status_code in (429, 500, 502, 503, 504):
                 wait = min(8, 2 ** attempt)
                 log.warning(
@@ -372,33 +378,68 @@ def fetch_journal(
     back catalogue into a "new papers" briefing.
     """
     works: dict[str, dict] = {}
+    failures: list[str] = []
+
     for issn in issns:
-        url = f"{CROSSREF_BASE}/journals/{issn}/works"
-        cursor = "*"
-        pages = 0
-        while cursor and pages < 25:  # 25 * rows is a generous ceiling per journal
-            params = {
-                "filter": f"from-{date_field}-date:{from_date},type:journal-article",
-                "rows": rows,
-                "cursor": cursor,
-                "select": SELECT_FIELDS,
-                "sort": date_field,
-                "order": "desc",
-            }
-            payload = crossref_get(session, url, params, timeout)
-            message = payload.get("message", {})
-            items = message.get("items", [])
-            for item in items:
-                doi = (item.get("DOI") or "").lower().strip()
-                if doi:
-                    works.setdefault(doi, item)
-            next_cursor = message.get("next-cursor")
-            if not items or not next_cursor or next_cursor == cursor:
+        # Preferred route, then a plain /works query filtered by ISSN. The
+        # fallback matters because Crossref's /journals index does not carry
+        # every valid ISSN — secondary (electronic) ISSNs and small publishers
+        # are often missing from it even though their DOIs are fully registered.
+        routes = [
+            (f"{CROSSREF_BASE}/journals/{issn}/works",
+             f"from-{date_field}-date:{from_date},type:journal-article"),
+            (f"{CROSSREF_BASE}/works",
+             f"issn:{issn},from-{date_field}-date:{from_date},type:journal-article"),
+        ]
+        got = False
+        last_exc: Exception | None = None
+        for url, filt in routes:
+            cursor = "*"
+            pages = 0
+            try:
+                while cursor and pages < 25:  # 25 * rows is a generous ceiling
+                    params = {
+                        "filter": filt,
+                        "rows": rows,
+                        "cursor": cursor,
+                        "select": SELECT_FIELDS,
+                        "sort": date_field,
+                        "order": "desc",
+                    }
+                    payload = crossref_get(session, url, params, timeout)
+                    message = payload.get("message", {})
+                    items = message.get("items", [])
+                    for item in items:
+                        doi = (item.get("DOI") or "").lower().strip()
+                        if doi:
+                            works.setdefault(doi, item)
+                    next_cursor = message.get("next-cursor")
+                    if not items or not next_cursor or next_cursor == cursor:
+                        break
+                    cursor = next_cursor
+                    pages += 1
+                    time.sleep(0.35)  # be a good API citizen
+                got = True
                 break
-            cursor = next_cursor
-            pages += 1
-            time.sleep(0.35)  # be a good API citizen
+            except NotInJournalIndex:
+                log.debug("    %s not in the journal index; trying /works", issn)
+                continue
+            except Exception as exc:
+                last_exc = exc
+                continue
+        if not got:
+            failures.append(f"{issn}: {last_exc or 'not found'}")
         time.sleep(0.35)
+
+    # Only a total failure counts. One dud ISSN must not discard a journal whose
+    # other ISSN returned perfectly good papers — that is what was knocking out
+    # Cell and Aging Biology.
+    if failures and len(failures) == len(issns):
+        raise RuntimeError("; ".join(failures))
+    if failures:
+        log.debug("  %s: %d of %d ISSNs unusable (%s)",
+                  journal_name, len(failures), len(issns), "; ".join(failures))
+
     log.info("  %-52s %3d record(s)", journal_name[:52], len(works))
     return list(works.values())
 
