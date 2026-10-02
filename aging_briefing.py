@@ -419,8 +419,13 @@ def collect_papers(
     for _e in cfg["journals"]:
         _kw = _e.get("keywords") or []
         if _kw:
+            # \b anchors each term to a word start, so "aging" no longer
+            # matches inside "imaging", "managing" or "packaging". Terms are
+            # still prefixes at the tail end ("senescen" -> senescence,
+            # senescent), which is deliberate.
             keyword_filters[_e["name"]] = re.compile(
-                "|".join(re.escape(k) for k in _kw), re.IGNORECASE)
+                r"\b(?:" + "|".join(re.escape(k) for k in _kw) + ")",
+                re.IGNORECASE)
     max_age = int(settings.get("max_pub_age_days", 400))
     oldest_allowed = (datetime.now(timezone.utc) - timedelta(days=max_age)).date().isoformat()
     seen: dict[str, str] = state["seen"]
