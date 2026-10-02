@@ -2,9 +2,23 @@ name: Daily Aging Briefing
 
 on:
   schedule:
-    - cron: "20 17 * * *"
-      timezone: "America/New_York"
+    - cron: "20 21 * * *"      # 21:20 UTC = 5:20 PM US Eastern (summer)
   workflow_dispatch:
+    inputs:
+      lookback:
+        description: "Days to look back (blank = normal daily window)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Build the PDF but send no email and record no state"
+        type: boolean
+        required: false
+        default: false
+      ignore_state:
+        description: "Ignore what has already been sent (use a scratch state file)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -12,41 +26,64 @@ permissions:
 jobs:
   briefing:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out project
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
-          cache: "pip"
+          python-version: "3.12"
+          cache: pip
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
-      - name: Run briefing
+      - name: Assemble arguments
+        id: args
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.lookback }}" ]; then
+            ARGS="$ARGS --lookback ${{ inputs.lookback }}"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ inputs.ignore_state }}" = "true" ]; then
+            # A scratch state file means nothing counts as "already sent",
+            # so a backfill actually returns papers instead of silence.
+            ARGS="$ARGS --state scratch_state.json"
+          fi
+          echo "value=$ARGS" >> "$GITHUB_OUTPUT"
+          echo "Running with:${ARGS:- (no extra arguments)}"
+
+      - name: Build and send the briefing
         env:
-          SMTP_HOST: smtp.gmail.com
-          SMTP_PORT: "465"
-          SMTP_SECURITY: ssl
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURITY: ${{ secrets.SMTP_SECURITY }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-        run: |
-          mkdir -p logs
-          python aging_briefing.py --log-file logs/briefing.log
+          EMAIL_CC: ${{ secrets.EMAIL_CC }}
+          EMAIL_BCC: ${{ secrets.EMAIL_BCC }}
+        run: python aging_briefing.py ${{ steps.args.outputs.value }}
 
-      - name: Save state for tomorrow
-        if: success()
+      - name: Keep a copy of the PDF for 30 days
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: briefing-${{ github.run_id }}
+          path: briefings/*.pdf
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Remember which DOIs were sent
+        # Skipped for dry runs and scratch-state runs, so a backfill or a test
+        # cannot poison the real record of what has been sent.
+        if: ${{ inputs.dry_run != true && inputs.ignore_state != true }}
         run: |
-          if git diff --quiet -- state.json; then
-            echo "No state change."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add state.json
-            git commit -m "Update briefing state"
-            git push
-          fi
+          rm -f scratch_state.json
+          git config user.name  "aging-briefing-bot"
+          git config user.email "actions@github.com"
+          git add state.json
+          git diff --staged --quiet || git commit -m "state: briefing $(date -u +%F)"
+          git push
