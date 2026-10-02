@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Daily Aging Research Briefing
+Daily Research Briefing
 =============================
 
 Collects newly published papers from a configured list of aging / gerontology /
@@ -839,7 +839,7 @@ def _draw_furniture(canvas, doc, ctx: dict) -> None:
     canvas.rect(0, PAGE_H - 4.5, PAGE_W, 4.5, stroke=0, fill=1)  # accent bleed
 
     # Serif caps, widely tracked: the letterhead convention.
-    _tracked(canvas, MARGIN, PAGE_H - 38, "THE DAILY AGE", s_bold, 19, ACCENT, 3.4)
+    _tracked(canvas, MARGIN, PAGE_H - 38, "AGING DAILY", s_bold, 19, ACCENT, 3.4)
 
     # Date sits on the same baseline, right-aligned.
     _tracked(canvas, PAGE_W - MARGIN, PAGE_H - 38, ctx["date_line"],
@@ -1221,7 +1221,7 @@ def send_email(pdf_path: Path, papers: list[Paper], run_date: datetime,
     msg = EmailMessage()
     count = len(papers)
     msg["Subject"] = (
-        f"The Daily Age: Your Aging Brief — {count} new aging {'paper' if count == 1 else 'papers'} "
+        f"Aging Daily: Your Regular Brief — {count} new {'paper' if count == 1 else 'papers'} "
         f"— {run_date:%Y-%m-%d}"
     )
     msg["From"] = sender
@@ -1234,10 +1234,10 @@ def send_email(pdf_path: Path, papers: list[Paper], run_date: datetime,
     # which is what to_addrs below does.
 
     lines = [
-        f"Daily Aging Research Briefing — {run_date:%A, %d %B %Y}",
+        f"Aging Research Briefing — {run_date:%A, %d %B %Y}",
         "",
         f"{count} new {'paper' if count == 1 else 'papers'} across the monitored journals.",
-        "The attached PDF lists every title alphabetically.",
+        "The attached PDF lists every title by journal.",
         "",
     ]
     if settings.get("include_titles_in_email_body", True) and papers:
@@ -1633,7 +1633,7 @@ def _run(args: argparse.Namespace) -> int:
         save_state(args.state, state, int(settings.get("seen_retention_days", 180)))
         return 0
 
-    out = args.out_dir / f"The-Daily-Age-{run_date:%Y-%m-%d}.pdf"
+    out = args.out_dir / f"Aging-Daily-{run_date:%Y-%m-%d}.pdf"
     build_pdf(papers, out, run_date, window_start, stats, settings)
 
     if args.dry_run or args.no_email:
