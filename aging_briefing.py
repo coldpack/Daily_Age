@@ -4,7 +4,7 @@ Daily Aging Research Briefing
 =============================
 
 Collects newly published papers from a configured list of aging / gerontology /
-geroscience journals, sorts every title by paper,
+geroscience journals, sorts every title alphabetically into a single A-Z list,
 renders it as a PDF, and emails that PDF to you.
 
 Data source
@@ -104,6 +104,7 @@ class RunStats:
     raw_results: int = 0
     filtered_noise: int = 0
     filtered_old: int = 0
+    filtered_offtopic: int = 0
     already_seen: int = 0
     new_papers: int = 0
 
@@ -411,6 +412,15 @@ def collect_papers(
     timeout = int(settings.get("request_timeout_seconds", 30))
     rows = int(settings.get("max_rows_per_page", 200))
     date_field = settings.get("date_filter", "created")
+    # General journals (Nature, Science, Cell, NEJM) publish overwhelmingly
+    # non-aging content. A journal with a "keywords" list only contributes
+    # titles matching one of them; journals without the key are unfiltered.
+    keyword_filters: dict[str, re.Pattern] = {}
+    for _e in cfg["journals"]:
+        _kw = _e.get("keywords") or []
+        if _kw:
+            keyword_filters[_e["name"]] = re.compile(
+                "|".join(re.escape(k) for k in _kw), re.IGNORECASE)
     max_age = int(settings.get("max_pub_age_days", 400))
     oldest_allowed = (datetime.now(timezone.utc) - timedelta(days=max_age)).date().isoformat()
     seen: dict[str, str] = state["seen"]
@@ -471,6 +481,10 @@ def collect_papers(
             if is_noise(title, noise):
                 stats.filtered_noise += 1
                 continue
+            kw = keyword_filters.get(name)
+            if kw and not kw.search(title):
+                stats.filtered_offtopic += 1
+                continue
             if doi in seen:
                 stats.already_seen += 1
                 continue
@@ -512,6 +526,10 @@ def collect_papers(
                     title = clean_title(titles[0]) if titles else ""
                     if not doi or not title or is_noise(title, noise):
                         stats.filtered_noise += 1
+                        continue
+                    kw = keyword_filters.get(name)
+                    if kw and not kw.search(title):
+                        stats.filtered_offtopic += 1
                         continue
                     if doi in seen or doi in papers:
                         stats.already_seen += 1
@@ -816,7 +834,7 @@ def _draw_furniture(canvas, doc, ctx: dict) -> None:
     canvas.rect(0, PAGE_H - 4.5, PAGE_W, 4.5, stroke=0, fill=1)  # accent bleed
 
     # Serif caps, widely tracked: the letterhead convention.
-    _tracked(canvas, MARGIN, PAGE_H - 38, "AGING DAILY", s_bold, 19, ACCENT, 3.4)
+    _tracked(canvas, MARGIN, PAGE_H - 38, "THE DAILY AGE", s_bold, 19, ACCENT, 3.4)
 
     # Date sits on the same baseline, right-aligned.
     _tracked(canvas, PAGE_W - MARGIN, PAGE_H - 38, ctx["date_line"],
@@ -1198,7 +1216,7 @@ def send_email(pdf_path: Path, papers: list[Paper], run_date: datetime,
     msg = EmailMessage()
     count = len(papers)
     msg["Subject"] = (
-        f"Aging Daily: Your Regularly Scheduled Brief — {count} new aging {'paper' if count == 1 else 'papers'} "
+        f"The Daily Age: Your Aging Brief — {count} new aging {'paper' if count == 1 else 'papers'} "
         f"— {run_date:%Y-%m-%d}"
     )
     msg["From"] = sender
@@ -1214,7 +1232,7 @@ def send_email(pdf_path: Path, papers: list[Paper], run_date: datetime,
         f"Daily Aging Research Briefing — {run_date:%A, %d %B %Y}",
         "",
         f"{count} new {'paper' if count == 1 else 'papers'} across the monitored journals.",
-        "The attached PDF lists every title by paper.",
+        "The attached PDF lists every title alphabetically.",
         "",
     ]
     if settings.get("include_titles_in_email_body", True) and papers:
@@ -1493,7 +1511,7 @@ def force_utf8_streams() -> None:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Daily aging-research briefing: collect, PDF, email.",
+        description="Daily aging-research briefing: collect, alphabetize, PDF, email.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--config", type=Path, default=HERE / "journals.json")
@@ -1588,9 +1606,10 @@ def _run(args: argparse.Namespace) -> int:
     papers = collect_papers(cfg, state, window_start, stats)
 
     log.info(
-        "Results: %d raw, %d front-matter/errata, %d too old, %d already sent, "
-        "%d new", stats.raw_results, stats.filtered_noise, stats.filtered_old,
-        stats.already_seen, stats.new_papers,
+        "Results: %d raw, %d front-matter/errata, %d off-topic, %d too old, "
+        "%d already sent, %d new", stats.raw_results, stats.filtered_noise,
+        stats.filtered_offtopic, stats.filtered_old, stats.already_seen,
+        stats.new_papers,
     )
 
     enabled = sum(1 for j in cfg["journals"] if j.get("enabled", True))
